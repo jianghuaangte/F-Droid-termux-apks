@@ -7,31 +7,21 @@ on:
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
 
 jobs:
-  release-please:
+  sync-apks:
     runs-on: ubuntu-latest
     steps:
       # 1️⃣ Checkout
       - uses: actions/checkout@v4
 
-      # 2️⃣ 安装工具 jq 和 wget
+      # 2️⃣ 安装工具
       - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y jq wget gh
 
-      # 3️⃣ 运行 release-please 创建 release/tag
-      - name: Release Please
-        id: release
-        uses: googleapis/release-please-action@v4
-        with:
-          token: ${{ secrets.JIANG_PAT_TOKEN }}
-          release-type: simple
-
-      # 4️⃣ 下载 Termux APKs
+      # 3️⃣ 下载 Termux APKs
       - name: Download Termux APKs
         run: |
           mkdir -p .github/apks
@@ -46,17 +36,39 @@ jobs:
             fi
             url="https://f-droid.org/repo/${pkg}_${version}.apk"
             echo "Downloading $url ..."
-            wget -q -O ".github/apks/${pkg}_${version}.apk" "$url"
+            wget -q -O ".github/apks/${pkg}.apk" "$url"  # ✅ 这里统一命名，覆盖旧 APK
           done
 
-      # 5️⃣ 上传到 Release
-      - name: Create Stable Release
-        uses: ncipollo/release-action@v1
-        with:
-          allowUpdates: true
-          prerelease: false
-          tag: latest-termux
-          artifacts: ".github/apks/*.apk"
-          body: |
-            ${{ steps.build_changelog.outputs.changelog }}
-          token: ${{ secrets.JIANG_PAT_TOKEN }}
+      # 4️⃣ 清空 Release 的旧附件
+      - name: Clear old release assets
+        run: |
+          tag="latest-termux"
+          # 检查 release 是否存在
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # 删除所有附件
+            assets=$(gh release view "$tag" --json assets -q '.assets[].name')
+            for a in $assets; do
+              echo "Deleting $a ..."
+              gh release delete-asset "$tag" "$a" --yes
+            done
+          else
+            echo "Release $tag does not exist, will create new."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.JIANG_PAT_TOKEN }}
+
+      # 5️⃣ 创建/更新 Release 并上传最新 APK
+      - name: Upload APKs to Release
+        run: |
+          tag="latest-termux"
+          # 如果 release 不存在就创建
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "Termux APKs Latest" --notes "Daily sync from F-Droid"
+          fi
+          # 上传 APK
+          for apk in .github/apks/*.apk; do
+            echo "Uploading $apk ..."
+            gh release upload "$tag" "$apk" --clobber
+          done
+        env:
+          GH_TOKEN: ${{ secrets.JIANG_PAT_TOKEN }}
