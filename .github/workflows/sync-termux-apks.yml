@@ -1,0 +1,51 @@
+name: Sync Termux APKs
+
+on:
+  schedule:
+    - cron: "0 3 * * *"  # 每天凌晨3点 UTC+0
+  workflow_dispatch:   # 支持手动触发
+
+jobs:
+  download_and_release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y jq wget
+
+      - name: Set package list
+        run: |
+          echo "com.termux com.termux.gui com.termux.styling com.termux.window com.termux.widget com.termux.api com.termux.boot com.termux.tasker" > packages.txt
+
+      - name: Download Termux APKs
+        run: |
+          mkdir -p .github/apks
+          for pkg in $(cat packages.txt); do
+            echo "Processing $pkg ..."
+            # 获取 API JSON
+            json=$(curl -s "https://f-droid.org/api/v1/packages/$pkg")
+            # 提取 suggestedVersionCode
+            version=$(echo "$json" | jq -r '.suggestedVersionCode')
+            if [ "$version" = "null" ]; then
+              echo "No suggestedVersionCode for $pkg, skipping."
+              continue
+            fi
+            # 构造 APK URL
+            apk_url="https://f-droid.org/repo/${pkg}_${version}.apk"
+            echo "Downloading $apk_url ..."
+            wget -q -O ".github/apks/${pkg}_${version}.apk" "$apk_url"
+          done
+
+      - name: Create GitHub Release and upload APKs
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: ".github/apks/*.apk"
+          tag: "termux-sync-${{ github.run_number }}"
+          name: "Termux APKs - run ${{ github.run_number }}"
+          draft: false
+          prerelease: false
