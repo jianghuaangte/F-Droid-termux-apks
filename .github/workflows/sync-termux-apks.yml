@@ -55,6 +55,7 @@ jobs:
         with:
           allowUpdates: true
           prerelease: false
+          tag: latest-termux
           artifacts: ".github/apks/*.apk"
           body: |
             ${{ steps.build_changelog.outputs.changelog }}
