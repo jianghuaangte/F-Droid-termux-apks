@@ -22,7 +22,7 @@ jobs:
           sudo apt install -y jq wget gh
 
       # 3️⃣ 下载 Termux APKs
-      - name: Download Termux APKs
+      - name: Download Termux APKs with version
         run: |
           mkdir -p .github/apks
           packages="com.termux com.termux.gui com.termux.styling com.termux.window com.termux.widget com.termux.api com.termux.boot com.termux.tasker"
@@ -35,15 +35,16 @@ jobs:
               continue
             fi
             url="https://f-droid.org/repo/${pkg}_${version}.apk"
-            echo "Downloading $url ..."
-            wget -q -O ".github/apks/${pkg}.apk" "$url"  # ✅ 这里统一命名，覆盖旧 APK
+            outfile=".github/apks/${pkg}_${version}.apk"
+            echo "Downloading $url -> $outfile"
+            wget -q -O "$outfile" "$url"
           done
 
       # 4️⃣ 清空 Release 的旧附件
       - name: Clear old release assets
         run: |
           tag="latest-termux"
-          # 检查 release 是否存在
+          # 如果 release 存在
           if gh release view "$tag" >/dev/null 2>&1; then
             # 删除所有附件
             assets=$(gh release view "$tag" --json assets -q '.assets[].name')
