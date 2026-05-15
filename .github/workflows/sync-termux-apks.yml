@@ -49,13 +49,13 @@ jobs:
             wget -q -O ".github/apks/${pkg}_${version}.apk" "$url"
           done
 
-      # 5️⃣ 上传 APKs 到刚创建的 Release
-      - name: Upload APKs to Release
-        if: ${{ steps.release.outputs.release_created }}
-        run: |
-          echo "Uploading APKs to release ${{ steps.release.outputs.tag_name }} ..."
-          for apk in .github/apks/*.apk; do
-            gh release upload ${{ steps.release.outputs.tag_name }} "$apk" --clobber
-          done
-        env:
-          GH_TOKEN: ${{ secrets.JIANG_PAT_TOKEN }}
+      # 5️⃣ 上传到 Release
+      - name: Create Stable Release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          prerelease: false
+          artifacts: ".github/apks/*.apk"
+          body: |
+            ${{ steps.build_changelog.outputs.changelog }}
+          token: ${{ secrets.JIANG_PAT_TOKEN }}
